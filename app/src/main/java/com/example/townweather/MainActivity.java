@@ -13,10 +13,13 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
-import android.widget.EditText;
+import android.widget.Filter;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -37,6 +40,7 @@ import org.osmdroid.views.overlay.Marker;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
@@ -88,7 +92,14 @@ public class MainActivity extends Activity {
         details = findViewById(R.id.details);
         setSky(SKY[0]);
 
-        EditText townInput = findViewById(R.id.townInput);
+        AutoCompleteTextView townInput = findViewById(R.id.townInput);
+        townInput.setAdapter(new TownAdapter());
+        townInput.setOnItemClickListener((parent, v, pos, id) -> {
+            Town t = (Town) parent.getItemAtPosition(pos);
+            hideKeyboard(townInput);
+            status("Loading…");
+            runAsync(() -> fetchWeather(t.lat, t.lon, t.label));
+        });
         findViewById(R.id.searchButton).setOnClickListener(v -> searchTown(townInput));
         townInput.setOnEditorActionListener((v, actionId, e) -> {
             if (actionId != EditorInfo.IME_ACTION_SEARCH) return false;
@@ -149,21 +160,70 @@ public class MainActivity extends Activity {
 
     // ---------------- Search: town name -> coordinates (Open-Meteo geocoding) ----------------
 
-    private void searchTown(EditText input) {
-        String town = input.getText().toString().trim();
-        if (town.isEmpty()) { toast("Type a town name"); return; }
-        ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(input.getWindowToken(), 0);
-        status("Searching “" + town + "”…");
-        runAsync(() -> {
-            JSONObject res = getJson("https://geocoding-api.open-meteo.com/v1/search?count=1&name="
-                    + URLEncoder.encode(town, "UTF-8"));
-            JSONArray results = res.optJSONArray("results");
-            if (results == null) throw new Exception("No town called “" + town + "” found");
-            JSONObject t = results.getJSONObject(0);
+    static class Town {
+        final String label;
+        final double lat, lon;
+
+        Town(JSONObject t) throws Exception {
             String name = t.getString("name");
             if (!t.optString("admin1").isEmpty()) name += ", " + t.optString("admin1");
             if (!t.optString("country").isEmpty()) name += ", " + t.optString("country");
-            fetchWeather(t.getDouble("latitude"), t.getDouble("longitude"), name);
+            label = name;
+            lat = t.getDouble("latitude");
+            lon = t.getDouble("longitude");
+        }
+
+        @Override public String toString() { return label; } // what the dropdown shows
+    }
+
+    /** Background thread only. */
+    private static List<Town> findTowns(String query, int count) throws Exception {
+        JSONArray results = getJson("https://geocoding-api.open-meteo.com/v1/search?count=" + count + "&name="
+                + URLEncoder.encode(query, "UTF-8")).optJSONArray("results");
+        List<Town> towns = new ArrayList<>();
+        for (int i = 0; results != null && i < results.length(); i++) towns.add(new Town(results.getJSONObject(i)));
+        return towns;
+    }
+
+    // Dropdown suggestions while typing. Filter.performFiltering already runs on a background
+    // thread and skips stale queries while the user keeps typing, so no extra threading/debounce.
+    private class TownAdapter extends ArrayAdapter<Town> {
+        private final Filter filter = new Filter() {
+            @Override protected FilterResults performFiltering(CharSequence q) {
+                FilterResults r = new FilterResults();
+                if (q == null || q.toString().trim().length() < 2) return r;
+                try {
+                    r.values = findTowns(q.toString().trim(), 6);
+                } catch (Exception ignored) {
+                    // offline / API error: just no suggestions
+                }
+                return r;
+            }
+
+            @SuppressWarnings("unchecked")
+            @Override protected void publishResults(CharSequence q, FilterResults r) {
+                clear();
+                if (r.values != null) addAll((List<Town>) r.values);
+            }
+        };
+
+        TownAdapter() { super(MainActivity.this, android.R.layout.simple_dropdown_item_1line); }
+
+        @Override public Filter getFilter() { return filter; }
+    }
+
+    // Search button / keyboard search key: take the best match.
+    private void searchTown(AutoCompleteTextView input) {
+        String town = input.getText().toString().trim();
+        if (town.isEmpty()) { toast("Type a town name"); return; }
+        input.dismissDropDown();
+        hideKeyboard(input);
+        status("Searching “" + town + "”…");
+        runAsync(() -> {
+            List<Town> towns = findTowns(town, 1);
+            if (towns.isEmpty()) throw new Exception("No town called “" + town + "” found");
+            Town t = towns.get(0);
+            fetchWeather(t.lat, t.lon, t.label);
         });
     }
 
@@ -289,6 +349,10 @@ public class MainActivity extends Activity {
         findViewById(R.id.root).setBackground(
                 new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors));
         getWindow().setStatusBarColor(colors[0]);
+    }
+
+    private void hideKeyboard(View v) {
+        ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(v.getWindowToken(), 0);
     }
 
     private void status(String msg) {

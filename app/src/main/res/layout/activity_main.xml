@@ -8,6 +8,7 @@
 
     <!-- Search bar -->
     <LinearLayout
+        android:id="@+id/searchBar"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:background="@drawable/pill"
@@ -16,8 +17,12 @@
         android:paddingStart="16dp"
         android:paddingEnd="4dp">
 
-        <EditText
+        <AutoCompleteTextView
             android:id="@+id/townInput"
+            android:completionThreshold="2"
+            android:dropDownAnchor="@id/searchBar"
+            android:dropDownWidth="match_parent"
+            android:dropDownVerticalOffset="4dp"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
