@@ -25,8 +25,9 @@ import org.json.JSONObject;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.tileprovider.tilesource.ITileSource;
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
-import org.osmdroid.tileprovider.tilesource.XYTileSource;
+import org.osmdroid.util.MapTileIndex;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.CopyrightOverlay;
@@ -53,18 +54,19 @@ public class MainActivity extends Activity {
             {0xFF314755, 0xFF5B7486}, {0xFF83A4D4, 0xFFB6C9E0}, {0xFF232526, 0xFF414345}};
     private static final int[] NIGHT = {0xFF0F2027, 0xFF2C5364};
 
-    // Street map: CARTO tiles (OpenStreetMap data). tile.openstreetmap.org blocks most apps with "403 Access blocked".
-    // ponytail: CARTO is free for non-commercial use (~75k map views/month); switch to MapTiler/Stadia with a key if this ships
-    private static final ITileSource STREET = new XYTileSource("CartoVoyager", 0, 19, 256, ".png",
-            new String[]{"https://a.basemaps.cartocdn.com/rastertiles/voyager/",
-                    "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
-                    "https://c.basemaps.cartocdn.com/rastertiles/voyager/"},
-            "© OpenStreetMap contributors © CARTO");
+    // Map types, cycled by the map button. All keyless.
+    // (tile.openstreetmap.org blocks apps with "403 Access blocked"; CARTO now needs an API key.)
+    // ponytail: Esri basemaps are fine for student/dev use; a published app should get a free ArcGIS/MapTiler key
+    private static final ITileSource[] MAP_TYPES = {
+            esri("EsriStreet", "World_Street_Map", "Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors"),
+            TileSourceFactory.OpenTopo,
+            esri("EsriSatellite", "World_Imagery", "Tiles © Esri, Maxar, Earthstar Geographics")};
+    private static final String[] MAP_NAMES = {"🗺 Street", "⛰ Terrain", "🛰 Satellite"};
 
     private TextView place, coords, icon, temp, condition, details;
     private MapView map;
     private Marker marker;
-    private boolean terrain = false;
+    private int mapType = 0;
     private double lastLat, lastLon;
     private String lastPlace;
 
@@ -103,7 +105,7 @@ public class MainActivity extends Activity {
 
     private void setupMap() {
         map = findViewById(R.id.map);
-        map.setTileSource(STREET);
+        map.setTileSource(MAP_TYPES[0]);
         map.setMultiTouchControls(true);
         map.getOverlays().add(new CopyrightOverlay(this)); // map credit, required by the tile licence
         map.getController().setZoom(4.0);
@@ -123,10 +125,11 @@ public class MainActivity extends Activity {
         }));
 
         Button mapType = findViewById(R.id.mapTypeButton);
+        mapType.setText(MAP_NAMES[0]);
         mapType.setOnClickListener(v -> {
-            terrain = !terrain;
-            map.setTileSource(terrain ? TileSourceFactory.OpenTopo : STREET);
-            mapType.setText(terrain ? "🗺 Street" : "⛰ Terrain");
+            this.mapType = (this.mapType + 1) % MAP_TYPES.length;
+            map.setTileSource(MAP_TYPES[this.mapType]);
+            mapType.setText(MAP_NAMES[this.mapType]);
         });
 
         findViewById(R.id.openMapsButton).setOnClickListener(v -> {
@@ -263,6 +266,16 @@ public class MainActivity extends Activity {
             // no geocoder backend / offline: fall through
         }
         return "Selected location";
+    }
+
+    // Esri tile URLs are .../tile/{z}/{y}/{x} (y before x), so build the URL ourselves.
+    private static ITileSource esri(String name, String service, String credit) {
+        return new OnlineTileSourceBase(name, 0, 19, 256, "",
+                new String[]{"https://server.arcgisonline.com/ArcGIS/rest/services/" + service + "/MapServer/tile/"}, credit) {
+            @Override public String getTileURLString(long tile) {
+                return getBaseUrl() + MapTileIndex.getZoom(tile) + "/" + MapTileIndex.getY(tile) + "/" + MapTileIndex.getX(tile);
+            }
+        };
     }
 
     private static int kind(int code) {

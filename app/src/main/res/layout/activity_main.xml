@@ -148,7 +148,7 @@
                 android:background="@drawable/pill"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:text="⛰ Terrain"
+                android:text="🗺 Street"
                 android:textAllCaps="false"
                 android:textColor="#222222" />
 
