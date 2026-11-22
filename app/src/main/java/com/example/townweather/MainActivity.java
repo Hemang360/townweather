@@ -24,9 +24,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.events.MapEventsReceiver;
+import org.osmdroid.tileprovider.tilesource.ITileSource;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.tileprovider.tilesource.XYTileSource;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.CopyrightOverlay;
 import org.osmdroid.views.overlay.MapEventsOverlay;
 import org.osmdroid.views.overlay.Marker;
 
@@ -50,6 +53,14 @@ public class MainActivity extends Activity {
             {0xFF314755, 0xFF5B7486}, {0xFF83A4D4, 0xFFB6C9E0}, {0xFF232526, 0xFF414345}};
     private static final int[] NIGHT = {0xFF0F2027, 0xFF2C5364};
 
+    // Street map: CARTO tiles (OpenStreetMap data). tile.openstreetmap.org blocks most apps with "403 Access blocked".
+    // ponytail: CARTO is free for non-commercial use (~75k map views/month); switch to MapTiler/Stadia with a key if this ships
+    private static final ITileSource STREET = new XYTileSource("CartoVoyager", 0, 19, 256, ".png",
+            new String[]{"https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+                    "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+                    "https://c.basemaps.cartocdn.com/rastertiles/voyager/"},
+            "© OpenStreetMap contributors © CARTO");
+
     private TextView place, coords, icon, temp, condition, details;
     private MapView map;
     private Marker marker;
@@ -64,7 +75,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         // osmdroid setup must happen before the MapView is inflated; OSM tile servers require a user agent
         Configuration.getInstance().load(this, getSharedPreferences("osmdroid", MODE_PRIVATE));
-        Configuration.getInstance().setUserAgentValue(getPackageName());
+        Configuration.getInstance().setUserAgentValue("TownWeather/1.0 (Android student project)");
         setContentView(R.layout.activity_main);
 
         place = findViewById(R.id.place);
@@ -92,8 +103,9 @@ public class MainActivity extends Activity {
 
     private void setupMap() {
         map = findViewById(R.id.map);
-        map.setTileSource(TileSourceFactory.MAPNIK);
+        map.setTileSource(STREET);
         map.setMultiTouchControls(true);
+        map.getOverlays().add(new CopyrightOverlay(this)); // map credit, required by the tile licence
         map.getController().setZoom(4.0);
         map.getController().setCenter(new GeoPoint(20.0, 78.0));
 
@@ -113,7 +125,7 @@ public class MainActivity extends Activity {
         Button mapType = findViewById(R.id.mapTypeButton);
         mapType.setOnClickListener(v -> {
             terrain = !terrain;
-            map.setTileSource(terrain ? TileSourceFactory.OpenTopo : TileSourceFactory.MAPNIK);
+            map.setTileSource(terrain ? TileSourceFactory.OpenTopo : STREET);
             mapType.setText(terrain ? "🗺 Street" : "⛰ Terrain");
         });
 
