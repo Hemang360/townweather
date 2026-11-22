@@ -1,0 +1,18 @@
+plugins { id 'com.android.application' version '8.7.3' }
+
+android {
+    namespace 'com.example.townweather'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.example.townweather'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+// ponytail: no dependencies — HttpURLConnection, org.json, Geocoder are all built into Android
