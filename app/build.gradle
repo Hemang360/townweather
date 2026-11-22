@@ -6,7 +6,7 @@ android {
     defaultConfig {
         applicationId 'com.example.townweather'
         minSdk 24
-        targetSdk 35
+        targetSdk 34 // ponytail: 34 avoids Android 15's forced edge-to-edge layout; bump to 35 + handle insets if publishing to Play
         versionCode 1
         versionName '1.0'
     }
@@ -15,4 +15,8 @@ android {
         targetCompatibility JavaVersion.VERSION_11
     }
 }
-// ponytail: no dependencies — HttpURLConnection, org.json, Geocoder are all built into Android
+
+dependencies {
+    // OpenStreetMap map view — free, no API key (Google Maps would need one)
+    implementation 'org.osmdroid:osmdroid-android:6.1.20'
+}
